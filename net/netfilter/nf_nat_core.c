@@ -26,6 +26,45 @@
 #include <uapi/linux/netfilter/nf_nat.h>
 
 #include "nf_internals.h"
+//kwlee
+#include <linux/scone.h>
+
+#if IS_ENABLED(CONFIG_NF_NAT)
+#ifdef FLOW_TABLE
+int scone_simple_netfilter(struct sk_buff *skb){
+    enum ip_conntrack_info ctinfo;
+    enum nf_nat_manip_type maniptype = NF_NAT_MANIP_SRC;
+    struct nf_conn *ct;
+    int hooknum, err = NF_ACCEPT;
+    struct iphdr *iph;
+
+    iph = ip_hdr(skb);
+
+    if(skb == NULL)
+        return NF_ACCEPT;
+
+    ct = nf_ct_get(skb, &ctinfo);
+    if (!ct)
+                return NF_ACCEPT;
+
+    if (maniptype == NF_NAT_MANIP_SRC)
+                hooknum = NF_INET_LOCAL_IN; /* Source NAT */
+    else
+                hooknum = NF_INET_LOCAL_OUT; /* Destination NAT */
+
+    if (!nf_nat_initialized(ct, maniptype)) {
+                err = nf_nat_alloc_null_binding(ct, hooknum);
+                if (err != NF_ACCEPT)
+                                return err;
+        }
+
+    err = nf_nat_packet(ct, ctinfo, hooknum, skb);
+
+    return err;
+}
+EXPORT_SYMBOL(scone_simple_netfilter);
+#endif
+#endif
 
 static spinlock_t nf_nat_locks[CONNTRACK_LOCKS];
 
@@ -714,7 +753,7 @@ unsigned int nf_nat_packet(struct nf_conn *ct,
 	/* Non-atomic: these bits don't change. */
 	if (ct->status & statusbit)
 		verdict = nf_nat_manip_pkt(skb, ct, mtype, dir);
-
+	
 	return verdict;
 }
 EXPORT_SYMBOL_GPL(nf_nat_packet);

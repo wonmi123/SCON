@@ -149,6 +149,12 @@
 
 #include "net-sysfs.h"
 
+//kwlee: for SCON
+#include <linux/scone.h>
+//#include <net/icmp.h>
+//#include <linux/netfilter.h>
+//#include <net/arp.h>
+
 #define MAX_GRO_SKBS 8
 
 /* This should be increased if a protocol with a bigger head is added. */
@@ -4030,6 +4036,41 @@ u16 netdev_pick_tx(struct net_device *dev, struct sk_buff *skb,
 }
 EXPORT_SYMBOL(netdev_pick_tx);
 
+static int __dev_queue_xmit_simple(struct sk_buff *skb, void *accel_priv)
+{
+	struct net_device *dev;
+	const struct net_device_ops *ops;
+	int rc = -ENOMEM;
+#ifdef FCRACKER
+	struct netdev_queue *txq;
+	struct ethhdr *mh = eth_hdr(skb);
+#endif
+
+	if(skb==NULL || skb->dev==NULL){
+		printk("SCON: xmit simple drop\n");
+		goto drop;
+	}
+	skb_reset_network_header(skb);
+
+	dev = skb->dev;
+	ops = dev->netdev_ops;
+
+	skb->queue_mapping = smp_processor_id();
+
+	rc = ops->ndo_start_xmit(skb, dev);
+
+	if (dev_xmit_complete(rc)){
+		goto out;
+	}
+
+drop:	rc = -ENETDOWN;
+	atomic_long_inc(&dev->tx_dropped);
+	kfree_skb(skb);
+	return rc;
+out:
+	return rc;
+}
+
 struct netdev_queue *netdev_core_pick_tx(struct net_device *dev,
 					 struct sk_buff *skb,
 					 struct net_device *sb_dev)
@@ -4127,11 +4168,12 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	q = rcu_dereference_bh(txq->qdisc);
 
 	trace_net_dev_queue(skb);
+#ifndef SKIP_QOS
 	if (q->enqueue) {
 		rc = __dev_xmit_skb(skb, q, dev, txq);
 		goto out;
 	}
-
+#endif
 	/* The device has no queue. Common case for software devices:
 	 * loopback, all the sorts of tunnels...
 
@@ -4196,7 +4238,14 @@ out:
 
 int dev_queue_xmit(struct sk_buff *skb)
 {
+/*#ifdef SIMPLE_PATH
+	if(skb->ft == NULL)
+		return __dev_queue_xmit(skb, NULL);
+	else if(skb->ft->xmit_simple == 1)
+		return __dev_queue_xmit_simple(skb, NULL);
+#endif*/
 	return __dev_queue_xmit(skb, NULL);
+
 }
 EXPORT_SYMBOL(dev_queue_xmit);
 
@@ -5446,6 +5495,268 @@ static void __netif_receive_skb_list_core(struct list_head *head, bool pfmemallo
 	/* dispatch final sublist */
 	__netif_receive_skb_list_ptype(&sublist, pt_curr, od_curr);
 }
+
+#ifdef SIMPLE_PATH
+extern struct neighbour *__ipv4_neigh_lookup_noref_proxy(struct net_device *dev, u32 key);
+extern struct neigh_table arp_tbl;
+
+int netif_simple_netfilter(u_int8_t pf, unsigned int hook,
+				 struct sk_buff *skb) {
+
+    return nf_hook(pf, hook, sock_net(skb->sk), skb->sk, skb, NULL, skb_dst(skb)->dev, NULL);
+}
+
+int pre_routing_netfilter(struct sk_buff* skb){
+	int ret;
+#ifdef FLOW_TABLE
+  if (skb->netfilter == 0) {
+    if ((ret = netif_simple_netfilter(NFPROTO_IPV4, NF_INET_PRE_ROUTING, skb)) != 1) {
+      if (skb->ft != NULL)
+        skb->ft->netfilter = 0;
+      dev_kfree_skb(skb);
+      return NET_RX_DROP;
+    }
+  }
+	else
+		return NET_RX_SUCCESS;
+#else
+  if ((ret = netif_simple_netfilter(NFPROTO_IPV4, NF_INET_PRE_ROUTING, skb)) != 1) {
+    dev_kfree_skb(skb);
+    return NET_RX_DROP;
+  }
+#endif
+}
+
+int forward_netfilter(struct sk_buff* skb) {
+  int ret;
+#ifdef FLOW_TABLE
+  if (skb->netfilter == 0) {
+    if ((ret = netif_simple_netfilter(NFPROTO_IPV4, NF_INET_FORWARD, skb)) != 1) {
+      if (skb->ft != NULL)
+        skb->ft->netfilter = 0;
+      dev_kfree_skb(skb);
+      return NET_RX_DROP;
+    }
+  }
+	else
+		return NET_RX_SUCCESS;
+#else
+  if ((ret = netif_simple_netfilter(NFPROTO_IPV4, NF_INET_FORWARD, skb)) != 1) {
+    dev_kfree_skb(skb);
+  return NET_RX_DROP;
+  }
+#endif
+}
+
+int post_routing_netfilter(struct sk_buff* skb) {
+    int ret;
+#ifdef FLOW_TABLE
+    if (skb->netfilter == 0) {
+        if ((ret = netif_simple_netfilter(NFPROTO_IPV4, NF_INET_POST_ROUTING, skb)) != 1) {
+            if (skb->ft != NULL)
+                skb->ft->netfilter = 0;
+            dev_kfree_skb(skb);
+            return NET_RX_DROP;
+        } else {
+            skb->ft->netfilter = 1;
+            return NET_RX_SUCCESS;
+        }
+    } else return NET_RX_SUCCESS;
+#else
+    if ((ret = netif_simple_netfilter(NFPROTO_IPV4, NF_INET_POST_ROUTING, skb)) != 1) {
+        dev_kfree_skb(skb);
+        return NET_RX_DROP;
+    }
+#endif
+
+}
+
+struct neighbour* get_neighbour(struct sk_buff* skb, struct net_device *dev) {
+    struct neighbour *neigh;
+    u32 nexthop;
+
+#ifndef DST_PASS
+    struct dst_entry *dst = skb_dst(skb);
+    struct rtable *rt = (struct rtable *)dst;
+#endif
+
+#ifdef FLOW_TABLE
+    if (skb->ft == NULL) {
+#ifdef DST_PASS
+        struct dst_entry *dst = skb_dst(skb);
+        struct rtable *rt = (struct rtable *)dst;
+#endif
+        nexthop = (__force u32) rt_nexthop(rt, ip_hdr(skb)->daddr);
+        neigh = __ipv4_neigh_lookup_noref(dev, nexthop);
+    } else if (skb->neigh == NULL) {
+#ifdef DST_PASS
+        struct dst_entry *dst = skb_dst(skb);
+        struct rtable *rt = (struct rtable *)dst;
+#endif
+				nexthop = (__force u32) rt_nexthop(rt, ip_hdr(skb)->daddr);
+				neigh = __ipv4_neigh_lookup_noref(dev, nexthop);
+        skb->ft->neigh = neigh;
+    } else {
+        neigh = skb->neigh;
+    }
+#else
+		nexthop = (__force u32) rt_nexthop(rt, ip_hdr(skb)->daddr);
+		neigh = __ipv4_neigh_lookup_noref(dev, nexthop);
+#endif
+
+    if (unlikely(!neigh))
+            neigh = __neigh_create(&arp_tbl, &nexthop, skb->dev, false);
+
+    return neigh;
+
+}
+
+int netif_simple_route(struct sk_buff* skb, struct iphdr *iph) {
+#ifndef DST_PASS
+    if (!skb_dst(skb)) {
+#else
+    if (skb->ft->_skb_refdst == 0) {
+#endif
+            int err = ip_route_input_noref(skb, iph->daddr, iph->saddr,
+                                           iph->tos, skb->dev);
+
+            if (unlikely(err)) {
+                    unsigned long saddr = ntohl( iph->saddr );
+                    unsigned long daddr = ntohl( iph->daddr );
+
+                    printk("unlikely(err) occurred, err:%d, daddr:%lu.%lu.%lu.%lu, saddr:%lu.%lu.%lu.%lu, tos:%d, dev:%p, smp_processor_id:%d\n",
+                       err, (daddr & 0xFF000000) >> 24, (daddr & 0x00FF0000) >> 16, (daddr & 0x0000FF00) >> 8, (daddr & 0x000000FF),
+                       (saddr & 0xFF000000) >> 24, (saddr & 0x00FF0000) >> 16, (saddr & 0x0000FF00) >> 8, (saddr & 0x000000FF),
+                       (int) iph->tos, skb->dev, smp_processor_id());
+
+                    if (err == -EXDEV)
+                            NET_INC_STATS(dev_net(skb->dev),
+                                             LINUX_MIB_IPRPFILTER);
+                    dev_kfree_skb(skb);
+                    return NET_RX_DROP;
+            }
+
+#ifdef FLOW_TABLE
+            skb->ft->_skb_refdst = skb->_skb_refdst;
+#ifdef DST_PASS
+            skb->ft->input = skb_dst(skb)->input;
+            skb->ft->out_dev = skb_dst(skb)->dev;
+            skb->input = skb->ft->input;
+            skb->out_dev = skb->ft->out_dev;
+#endif
+#endif
+    }
+
+    return NET_RX_SUCCESS;
+}
+
+int netif_simple_forward(struct sk_buff* skb, struct iphdr *iph){
+	int ret;
+	struct neighbour *neigh;
+
+	#ifndef DST_PASS
+	  struct net_device *dev = skb_dst(skb)->dev;
+	#else
+	  struct net_device *dev = skb->out_dev;
+	#endif
+
+	if(iph==NULL || ip_hdr(skb)==NULL){
+		printk("SCON: [%s] - ip header is NULL\n", __func__);
+		goto drop;
+	}
+
+  	skb->dev = dev;
+  	skb->protocol = htons(ETH_P_IP);
+
+	ret = scone_simple_netfilter(skb);
+	if(ret!=NF_ACCEPT){
+		printk("SCON: scone simple netfilter has errors\n");
+		goto drop;
+	}
+
+/*
+#ifndef DST_PASS
+    if (skb->len > min(skb_dst(skb)->dev->mtu, IP_MAX_MTU))
+#else
+    if (skb->ft->out_mtu == 0)
+        skb->ft->out_mtu = dev->mtu;
+
+    if (skb->len > skb->ft->out_mtu)
+#endif
+			return ip_fragment(sock_net(skb->sk), skb->sk, skb, dev->mtu, ip_finish_output2);
+*/
+
+ 	neigh = get_neighbour(skb, dev);
+
+	if (!IS_ERR(neigh))
+//		neigh_output(neigh, skb);
+		ret = neigh_output(neigh, skb, false);	//kwlee: updated in v5.10
+  	else
+    		goto drop;
+
+	//printk("SCON: neigh_output returns %d in [%s]\n", ret, __func__);
+ 	 return NET_RX_SUCCESS;
+
+drop:
+	kfree_skb(skb);
+	printk("SCON: [%s] Packet Drop at last\n", __func__);
+	return NET_RX_DROP;
+
+}
+
+int netif_simple_path(struct sk_buff* skb) {
+	struct iphdr *iph;
+	int ret;
+
+
+	if(skb == NULL || skb->ft == NULL){
+		printk("SCON: [%s] skb or skb->ft is NULL\n", __func__);
+		goto drop;
+	}
+
+	skb_reset_network_header(skb);
+	if (!skb_transport_header_was_set(skb))
+		skb_reset_transport_header(skb);
+	skb_reset_mac_len(skb);
+
+  	iph = ip_hdr(skb);
+/*
+	unsigned long saddr = ntohl( iph->saddr );
+  	unsigned long daddr = ntohl( iph->daddr );
+  	printk("simple_path: daddr:%lu.%lu.%lu.%lu, saddr:%lu.%lu.%lu.%lu, tos:%d, smp_processor_id:%d\n",
+  				(daddr & 0xFF000000) >> 24, (daddr & 0x00FF0000) >> 16, (daddr & 0x0000FF00) >> 8, (daddr & 0x000000FF),
+  				(saddr & 0xFF000000) >> 24, (saddr & 0x00FF0000) >> 16, (saddr & 0x0000FF00) >> 8, (saddr & 0x000000FF),
+  				(int) iph->tos, smp_processor_id());
+
+*/
+	ret = netif_simple_route(skb, iph);
+	if (ret == NET_RX_DROP){
+		printk("SCON: [%s] Packet Drop in netif_simple_route\n", __func__);
+		return ret;
+		}
+
+#ifndef DST_PASS
+    	if (skb_dst(skb) == NULL || skb_dst(skb)->input == NULL) {
+        	printk("skb_dst(skb) == NULL, cpu_id:%d\n", smp_processor_id());
+        	goto drop;
+    	}
+#endif
+
+    	ret = netif_simple_forward(skb, iph);
+    	if (ret == NET_RX_DROP){
+		printk("SCON: [%s] Packet Drop in netif_simple_forward\n", __func__);
+		return ret;
+	}
+    	return NET_RX_SUCCESS;
+
+drop:
+	dev_kfree_skb(skb);
+	printk("SCON: [%s] Packet Drop at last\n", __func__);
+	return NET_RX_DROP;
+
+}
+EXPORT_SYMBOL(netif_simple_path);
+#endif
 
 static int __netif_receive_skb(struct sk_buff *skb)
 {

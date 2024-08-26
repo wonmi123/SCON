@@ -18,6 +18,7 @@
 #include <linux/if_vlan.h>
 #include <linux/rhashtable.h>
 #include <linux/refcount.h>
+#include <linux/scone.h>	//kwlee
 
 #define BR_HASH_BITS 8
 #define BR_HASH_SIZE (1 << BR_HASH_BITS)
@@ -337,6 +338,13 @@ struct net_bridge_port {
 	u16				backup_redirected_cnt;
 
 	struct bridge_stp_xstats	stp_xstats;
+
+#ifdef FLOW_TABLE
+	struct scone_flow_table *ft;
+#ifdef MULTI_FT
+	struct list_head ctable_list;
+#endif
+#endif
 };
 
 #define kobj_to_brport(obj)	container_of(obj, struct net_bridge_port, kobj)

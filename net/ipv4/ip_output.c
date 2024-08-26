@@ -82,6 +82,7 @@
 #include <linux/netfilter_bridge.h>
 #include <linux/netlink.h>
 #include <linux/tcp.h>
+#include <linux/scone.h>	//kwlee
 
 static int
 ip_fragment(struct net *net, struct sock *sk, struct sk_buff *skb,
@@ -236,6 +237,17 @@ static int ip_finish_output2(struct net *net, struct sock *sk, struct sk_buff *s
 		/* if crossing protocols, can not use the cached header */
 		res = neigh_output(neigh, skb, is_v6gw);
 		rcu_read_unlock_bh();
+
+/* This only runs for the first packet in the flow. */
+#ifdef SIMPLE_PATH
+		if(res == NET_XMIT_SUCCESS && skb->ft != NULL){
+//hard-coded to work for the packet towards 10.0.1.2
+			if(ip_hdr(skb)->daddr == 33619978){
+				skb->ft->xmit_simple = 1;
+				skb->ft->netfilter = 1;
+			}
+		}
+#endif
 		return res;
 	}
 	rcu_read_unlock_bh();

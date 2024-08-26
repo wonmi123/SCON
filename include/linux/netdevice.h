@@ -70,6 +70,19 @@ struct udp_tunnel_nic;
 struct bpf_prog;
 struct xdp_buff;
 
+#ifdef SIMPLE_PATH
+extern struct iphdr *iph;
+int netif_simple_path(struct sk_buff *skb);
+int netif_simple_netfilter(u_int8_t pf, unsigned int hook,
+				 struct sk_buff *skb);
+int pre_routing_netfilter(struct sk_buff* skb);
+int forward_netfilter(struct sk_buff* skb);
+int post_routing_netfilter(struct sk_buff* skb);
+struct neighbour* get_neighbour(struct sk_buff* skb, struct net_device *dev);
+int netif_simple_route(struct sk_buff* skb, struct iphdr *iph);
+int netif_simple_forward(struct sk_buff* skb, struct iphdr *iph);
+#endif
+
 void synchronize_net(void);
 void netdev_set_default_ethtool_ops(struct net_device *dev,
 				    const struct ethtool_ops *ops);

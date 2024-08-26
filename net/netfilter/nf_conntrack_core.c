@@ -53,6 +53,8 @@
 #include <net/netns/hash.h>
 #include <net/ip.h>
 
+#include <linux/scone.h>
+
 #include "nf_internals.h"
 
 __cacheline_aligned_in_smp spinlock_t nf_conntrack_locks[CONNTRACK_LOCKS];
@@ -1826,6 +1828,7 @@ repeat:
 	}
 
 	ret = nf_conntrack_handle_packet(ct, skb, dataoff, ctinfo, state);
+
 	if (ret <= 0) {
 		/* Invalid: inverse of the return code tells
 		 * the netfilter core what to do */

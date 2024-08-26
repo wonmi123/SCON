@@ -1015,6 +1015,10 @@ static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
 	atomic_inc(&(skb_shinfo(skb)->dataref));
 	skb->cloned = 1;
 
+#ifdef FLOW_TABLE
+	n->ft = NULL;
+#endif
+
 	return n;
 #undef C
 }

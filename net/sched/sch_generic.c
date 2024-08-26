@@ -437,6 +437,7 @@ EXPORT_SYMBOL(dev_trans_start);
 
 static void dev_watchdog(struct timer_list *t)
 {
+#ifndef SIMPLE_PATH
 	struct net_device *dev = from_timer(dev, t, watchdog_timer);
 
 	netif_tx_lock(dev);
@@ -477,6 +478,7 @@ static void dev_watchdog(struct timer_list *t)
 	netif_tx_unlock(dev);
 
 	dev_put(dev);
+#endif
 }
 
 void __netdev_watchdog_up(struct net_device *dev)

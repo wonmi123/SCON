@@ -39,8 +39,6 @@
 #include <linux/clk.h>
 #include <linux/component.h>
 #include <linux/i2c.h>
-#include <linux/module.h>
-#include <linux/moduleparam.h>
 #include <linux/of_address.h>
 #include <linux/of_gpio.h>
 #include <linux/of_platform.h>
@@ -112,10 +110,6 @@
 #define HSM_MIN_CLOCK_FREQ	120000000
 #define CEC_CLOCK_FREQ 40000
 #define HDMI_14_MAX_TMDS_CLK   (340 * 1000 * 1000)
-
-/* bit field to force hotplug detection. bit0 = HDMI0 */
-static int force_hotplug = 0;
-module_param(force_hotplug, int, 0644);
 
 static const char * const output_format_str[] = {
 	[VC4_HDMI_OUTPUT_RGB]		= "RGB",
@@ -253,9 +247,7 @@ vc4_hdmi_connector_detect(struct drm_connector *connector, bool force)
 
 	WARN_ON(pm_runtime_resume_and_get(&vc4_hdmi->pdev->dev));
 
-	if (force_hotplug & BIT(vc4_hdmi->encoder.base.type - VC4_ENCODER_TYPE_HDMI0))
-		connected = true;
-	else if (vc4_hdmi->hpd_gpio) {
+	if (vc4_hdmi->hpd_gpio) {
 		if (gpio_get_value_cansleep(vc4_hdmi->hpd_gpio) ^
 		    vc4_hdmi->hpd_active_low)
 			connected = true;
@@ -345,17 +337,14 @@ static int vc4_hdmi_connector_atomic_check(struct drm_connector *connector,
 {
 	struct drm_connector_state *old_state =
 		drm_atomic_get_old_connector_state(state, connector);
-	struct vc4_hdmi_connector_state *old_vc4_state = conn_state_to_vc4_hdmi_conn_state(old_state);
 	struct drm_connector_state *new_state =
 		drm_atomic_get_new_connector_state(state, connector);
-	struct vc4_hdmi_connector_state *new_vc4_state = conn_state_to_vc4_hdmi_conn_state(new_state);
 	struct drm_crtc *crtc = new_state->crtc;
 
 	if (!crtc)
 		return 0;
 
 	if (old_state->colorspace != new_state->colorspace ||
-	    old_vc4_state->broadcast_rgb != new_vc4_state->broadcast_rgb ||
 	    !drm_connector_atomic_hdr_metadata_equal(old_state, new_state)) {
 		struct drm_crtc_state *crtc_state;
 

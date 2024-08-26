@@ -23,11 +23,28 @@
 #include "br_private.h"
 #include "br_private_tunnel.h"
 
+//kwlee
+#include <linux/ip.h>
+#include <net/ip.h>
+#include <linux/scone.h>
+
 static int
 br_netif_receive_skb(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	br_drop_fake_rtable(skb);
+
+#ifndef SIMPLE_PATH
 	return netif_receive_skb(skb);
+#else
+	if(skb->ft != NULL && skb->ft->xmit_simple == 1){
+		if (tcp_new_syn(skb))
+			return netif_receive_skb(skb);
+		else
+			return netif_simple_path(skb);
+	}
+	else
+		return netif_receive_skb(skb);
+#endif
 }
 
 static int br_pass_frame_up(struct sk_buff *skb)
@@ -36,7 +53,11 @@ static int br_pass_frame_up(struct sk_buff *skb)
 	struct net_bridge *br = netdev_priv(brdev);
 	struct net_bridge_vlan_group *vg;
 	struct pcpu_sw_netstats *brstats = this_cpu_ptr(br->stats);
-
+/*kwlee: The location of probe_ft is important,
+if it locates to different point, SCON does not work properly. */
+#ifdef FLOW_TABLE
+	probe_ft(skb);
+#endif
 	u64_stats_update_begin(&brstats->syncp);
 	brstats->rx_packets++;
 	brstats->rx_bytes += skb->len;

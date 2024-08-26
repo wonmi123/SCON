@@ -1,18 +1,30 @@
-Linux kernel
-============
+SCON: Speed-up COntainer Networking Stack
 
-There are several guides for kernel developers and users. These guides can
-be rendered in a number of formats, like HTML and PDF. Please read
-Documentation/admin-guide/README.rst first.
+1. Changed Files
+Note that modified lines in each file are defined with #ifdef FLOW_TABLE or SIMPLE_PATH
+- include/linux/skbuff.h, netdevice.h
+- include/net/ip.h
+- net/bridge/br_private.h, br_if.c, br_input.c
+(BRIDGE module should be included as built-in kernel)
+- net/ipv4/ip_output.c, arp.c
+- net/sched/sch_generic.c
+- net/core/dev.c, skbuff.c
+- net/netfilter/nf_nat_core.c
+(NF_NAT should be configured as "m")
+*How to: make menuconfig -> Networking Option -> Set "Netfilter connection tracking support" to "*"
+-> Set "Netfilter Network Address Translation" to "*" 
 
-In order to build the documentation, use ``make htmldocs`` or
-``make pdfdocs``.  The formatted documentation can also be read online at:
+2. (newly) Added Files
+- include/linux/scone.h
+- net/bridge/scone.c
 
-    https://www.kernel.org/doc/html/latest/
+3. How to activate SCON
+- Uncomment following configurations in include/linux/scone.h
+1) FLOW_TABLE
+2) MULTI_FT
+3) SIMPLE_PATH
 
-There are various text files in the Documentation/ subdirectory,
-several of them using the Restructured Text markup notation.
-
-Please read the Documentation/process/changes.rst file, as it contains the
-requirements for building and running the kernel, and information about
-the problems which may result by upgrading your kernel.
+4. Running Netperf benchmark
+- Execute Netperf benchmark first
+(First attempt returns an error message)
+- Second try will success

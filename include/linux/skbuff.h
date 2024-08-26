@@ -40,7 +40,7 @@
 #if IS_ENABLED(CONFIG_NF_CONNTRACK)
 #include <linux/netfilter/nf_conntrack_common.h>
 #endif
-
+#include <linux/scone.h>    //kwlee
 /* The interface for checksum offload between the stack and networking drivers
  * is as follows...
  *
@@ -767,6 +767,16 @@ struct sk_buff {
 	 * Note that queue_mapping is here mostly to fill a hole.
 	 */
 	__u16			queue_mapping;
+
+#ifdef FLOW_TABLE
+	struct scone_flow_table	*ft;
+#ifdef DST_PASS
+	int 		(*input)(struct sk_buff *);
+	struct net_device	*out_dev;
+#endif
+	struct neighbour	*neigh;
+	int netfilter;
+#endif
 
 /* if you move cloned around you also must adapt those constants */
 #ifdef __BIG_ENDIAN_BITFIELD

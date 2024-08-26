@@ -183,6 +183,25 @@ struct neigh_table arp_tbl = {
 };
 EXPORT_SYMBOL(arp_tbl);
 
+#ifdef SIMPLE_PATH
+struct neighbour *__ipv4_neigh_lookup_noref_proxy(struct net_device *dev, u32 key)
+{
+	struct neigh_hash_table *nht = rcu_dereference_bh(arp_tbl.nht);
+	struct neighbour *n;
+	u32 hash_val;
+
+	hash_val = arp_hashfn(key, dev, nht->hash_rnd[0]) >> (32 - nht->hash_shift);
+	for (n = rcu_dereference_bh(nht->hash_buckets[hash_val]);
+	     n != NULL;
+	     n = rcu_dereference_bh(n->next)) {
+		if (n->dev == dev && *(u32 *)n->primary_key == key)
+			return n;
+	}
+
+	return NULL;
+}
+#endif
+
 int arp_mc_map(__be32 addr, u8 *haddr, struct net_device *dev, int dir)
 {
 	switch (dev->type) {

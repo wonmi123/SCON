@@ -427,6 +427,12 @@ static struct net_bridge_port *new_nbp(struct net_bridge *br,
 	p->path_cost = port_cost(dev);
 	p->priority = 0x8000 >> BR_PORT_BITS;
 	p->port_no = index;
+#ifdef FLOW_TABLE
+	p->ft=NULL;
+#ifdef MULTI_FT
+	INIT_LIST_HEAD(&p->ctable_list);
+#endif
+#endif
 	p->flags = BR_LEARNING | BR_FLOOD | BR_MCAST_FLOOD | BR_BCAST_FLOOD;
 	br_init_port(p);
 	br_set_state(p, BR_STATE_DISABLED);

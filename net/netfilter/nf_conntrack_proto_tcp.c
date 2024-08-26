@@ -867,6 +867,7 @@ int nf_conntrack_tcp_packet(struct nf_conn *ct,
 	struct tcphdr _tcph;
 	unsigned long timeout;
 
+
 	th = skb_header_pointer(skb, dataoff, sizeof(_tcph), &_tcph);
 	if (th == NULL)
 		return -NF_ACCEPT;
