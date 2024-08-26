@@ -1,7 +1,7 @@
 # SCON
 
-SCON is a high-performance container networking accelerator for the Linux kernel. 
-It is designed to maintain interoperability, which is crucial for resource-constrained IoT devices, such as those using ARM or Intel cores. 
+SCON is a high-performance container networking accelerator for the Linux kernel that maintains interoperability, which is crucial for resource-restricted IoT devices. 
+It intelligently memorizes decisions on packet processing, ensuring container network efficiency without relying on specific hardware.
 SCON enhances container network efficiency by intelligently memorizing packet processing decisions, all without relying on specific hardware.
 
 ## Modified files
