@@ -1,4 +1,4 @@
-# SCON_iot24
+# SCON
 
 SCON is a high-performance container networking accelerator for the Linux kernel. 
 It is designed to maintain interoperability, which is crucial for resource-constrained IoT devices, such as those using ARM or Intel cores. 
