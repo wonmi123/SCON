@@ -35,7 +35,7 @@ To deactivate SCON, uncomment the following configurations in include/linux/scon
 @article{SCON2024,
   title={Intelligent Packet Processing for Performant Containers in IoT},
   author={Wonmi Choi, Yeonho Yoo, Kyungwoon Lee, Zhixiong Niu, Peng Cheng, Yongqiang Xiong, Gyeongsik Yang, and Chuck Yoo},
-  journal={IEEE Transactions on Intelligent Transportation Systems},
+  journal={IEEE Internet of Things},
   year={2024},
   publisher={IEEE}
 }
