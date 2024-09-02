@@ -15,6 +15,7 @@ The following files have been modified, with changes marked by #ifdef FLOW_TABLE
 - net/core/dev.c, skbuff.c
 - net/netfilter/nf_nat_core.c
 (NF_NAT should be configured as "m")
+
 *How to: make menuconfig -> Networking Option -> Set "Netfilter connection tracking support" to "*"
 -> Set "Netfilter Network Address Translation" to "*" 
 
