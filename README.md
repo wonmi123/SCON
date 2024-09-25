@@ -32,9 +32,9 @@ To deactivate SCON, uncomment the following configurations in include/linux/scon
 ## Citation
 
 ```
-@article{SCON2024,
+@article{choi2024intelligent,
   title={Intelligent Packet Processing for Performant Containers in IoT},
-  author={Wonmi Choi, Yeonho Yoo, Kyungwoon Lee, Zhixiong Niu, Peng Cheng, Yongqiang Xiong, Gyeongsik Yang, and Chuck Yoo},
+  author={Choi, Wonmi and Yoo, Yeonho and Lee, Kyungwoon and Niu, Zhixiong and Cheng, Peng and Xiong, Yongqiang and Yang, Gyeongsik and Yoo, Chuck},
   journal={IEEE Internet of Things Journal},
   year={2024},
   publisher={IEEE}
